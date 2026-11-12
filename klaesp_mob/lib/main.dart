@@ -1,25 +1,27 @@
 import 'package:flutter/material.dart';
 
+import 'features/auth/auth_repository.dart';
+import 'features/home/home_screen.dart';
+import 'features/onboarding/sign_in_screen.dart';
 import 'theme/klaesp_theme.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const KlaespApp());
 }
 
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+class KlaespApp extends StatefulWidget {
+  const KlaespApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  State<KlaespApp> createState() => _KlaespAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _KlaespAppState extends State<KlaespApp> {
   ThemeMode _themeMode = ThemeMode.system;
+  final _repository = AuthRepository();
 
   void _setThemeMode(ThemeMode mode) {
-    setState(() {
-      _themeMode = mode;
-    });
+    setState(() => _themeMode = mode);
   }
 
   @override
@@ -29,71 +31,49 @@ class _MyAppState extends State<MyApp> {
       theme: KlaespTheme.light(),
       darkTheme: KlaespTheme.dark(),
       themeMode: _themeMode,
-      home: MyHomePage(
-        title: 'KLAESP',
+      home: _StartScreen(
+        repository: _repository,
         onThemeChanged: _setThemeMode,
       ),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({
-    super.key,
-    required this.title,
-    required this.onThemeChanged,
-  });
+/// Opens the home screen when a session exists, otherwise the sign-in screen.
+class _StartScreen extends StatefulWidget {
+  const _StartScreen({required this.repository, required this.onThemeChanged});
 
-  final String title;
+  final AuthRepository repository;
   final ValueChanged<ThemeMode> onThemeChanged;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<_StartScreen> createState() => _StartScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
-  }
+class _StartScreenState extends State<_StartScreen> {
+  late final Future<bool> _hasSession = widget.repository.hasSession();
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-        actions: [
-          IconButton(
-            tooltip: isDark ? 'Switch to light theme' : 'Switch to dark theme',
-            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-            onPressed: () => widget.onThemeChanged(
-              isDark ? ThemeMode.light : ThemeMode.dark,
-            ),
-          ),
-        ],
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+    return FutureBuilder<bool>(
+      future: _hasSession,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.data!) {
+          return HomeScreen(
+            repository: widget.repository,
+            onThemeChanged: widget.onThemeChanged,
+          );
+        }
+        return SignInScreen(
+          repository: widget.repository,
+          onThemeChanged: widget.onThemeChanged,
+        );
+      },
     );
   }
 }

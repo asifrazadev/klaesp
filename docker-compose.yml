@@ -1,0 +1,53 @@
+# Local Postgres only:              docker compose up -d
+# Whole stack (migrate + web):      docker compose --profile app up --build
+# Values come from the root .env file (see .env.example).
+name: klaesp
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: klaesp
+      POSTGRES_PASSWORD: klaesp
+      POSTGRES_DB: klaesp
+    ports:
+      - "5432:5432"
+    volumes:
+      - klaesp-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-klaesp} -d klaesp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    profiles: ["app"]
+    build:
+      context: ./web
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-klaesp}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/klaesp?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    profiles: ["app"]
+    build:
+      context: ./web
+    restart: unless-stopped
+    env_file:
+      - path: web/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-klaesp}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/klaesp?schema=public
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  klaesp-postgres-data:
